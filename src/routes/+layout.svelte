@@ -1,0 +1,28 @@
+<script lang="ts">
+	import '../app.css';
+	import Header from '$lib/components/Header.svelte';
+	let { children } = $props();
+</script>
+
+<div class="container">
+	<div class="content border border-[#ccc2a5] bg-[#f8f5e6] p-5 shadow-md">
+		<Header />
+		<main class="min-h-[85svh]">
+			{@render children()}
+		</main>
+		<footer class="mt-auto flex items-center text-sm">
+			<div class="mt-4 text-center text-xs text-gray-600">
+				Records derived from India Meteorological Department official observations.
+			</div>
+		</footer>
+	</div>
+</div>
+
+<style>
+	.container {
+		display: flex;
+		flex-direction: column;
+		max-width: 64rem;
+		margin: 1rem auto;
+	}
+</style>
