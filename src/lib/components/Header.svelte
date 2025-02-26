@@ -1,4 +1,6 @@
 <script>
+	import { Cloud, Globe } from 'lucide-svelte';
+
 	let texts = $state(['hotter', 'colder', 'wetter', 'drier', 'windier', 'cloudier']);
 
 	let currentIndex = $state(Math.floor(Math.random() * texts.length));
@@ -25,12 +27,12 @@
 	<div class="relative border-b-2 border-double border-[#233674] py-2">
 		<!-- Header Row -->
 		<div class="mb-3 flex flex-col items-center justify-between md:flex-row">
-			<div class="w-full text-center text-base font-bold text-[#233674] md:w-1/3 md:text-left">
+			<div class="w-full text-center text-xs font-bold text-[#233674] md:w-1/3 md:text-left">
 				DIAGRAM CHASING
 			</div>
 			<div class="w-full text-center text-xs text-black italic md:w-1/3">PRESENTS</div>
-			<div class="w-full text-center text-base font-bold text-[#233674] md:w-1/3 md:text-right">
-				WEATHER EXTREMES EXPLORER
+			<div class="w-full text-center text-xs font-bold text-[#233674] md:w-1/3 md:text-right">
+				A DAILY CLIMATOLOGICAL BULLETIN
 			</div>
 		</div>
 
@@ -38,46 +40,54 @@
 		<div class="relative flex h-auto flex-col justify-between md:flex-row md:items-center">
 			<!-- Left Seal -->
 			<div
-				class="absolute top-0 left-0 flex h-12 w-12 items-center justify-center rounded-full border border-[#233674] bg-white text-center text-[7px] leading-tight text-[#233674] md:relative md:mx-0"
+				class="absolute top-0 left-0 flex size-12 items-center justify-center rounded-full border border-[#233674] text-center text-[6px] leading-tight text-[#233674] md:relative md:mx-0 md:ml-2"
 			>
-				WEATHER<br />BUREAU<br />EST.<br />2025
+				<div class="relative flex h-full w-full flex-col items-center justify-center p-1">
+					<div class="text-[7px] font-bold">WEATHER</div>
+					<div class="flex h-8 w-8 items-center justify-center">
+						<Cloud class="h-6 w-6" strokeWidth={1.5} />
+					</div>
+					<div class="text-[7px] font-bold">BUREAU</div>
+					<div class="text-[5px]">EST. 2025</div>
+				</div>
 			</div>
 
 			<!-- Left Officers -->
-			<div class="w-full p-2 text-center text-[10px] leading-tight md:w-1/3 md:text-left">
+			<div class="w-full p-2 text-center text-[10px] leading-tight md:w-4/12 md:text-left">
 				BUREAU OF HISTORICAL CLIMATOLOGY,<br />
 				COMPARATIVE ANALYSIS OFFICE
 			</div>
 
 			<!-- Title -->
-			<div class="flex flex-col items-center justify-center md:w-1/2">
+			<div class="flex w-full flex-grow flex-col items-center justify-center">
 				<div class="text-center text-4xl font-black tracking-wide text-[#233674]">
-					WEATHER DISPATCH
-				</div>
-				<div class="text-center text-xs text-gray-900 italic">
-					Updated: {lastUpdated}
+					WEATHER ANOMALY DISPATCH
 				</div>
 			</div>
 
 			<!-- Right Officers -->
-			<div class="w-full p-2 text-center text-[10px] leading-tight md:w-1/3 md:text-right">
-				DAILY PHENOMENA <br /> DEVIATION TELEGRAPH
+			<div class="w-full p-2 text-center text-[10px] leading-tight md:w-4/12 md:text-right">
+				Updated: <br />
+				{lastUpdated}
 			</div>
 
 			<!-- Right Seal -->
 			<div
-				class="absolute top-0 right-0 flex h-12 w-12 items-center justify-center rounded-full border border-[#233674] bg-white text-center text-[7px] leading-tight text-[#233674] md:relative md:mx-0"
+				class="absolute top-0 right-0 flex size-12 items-center justify-center rounded-full border border-[#233674] text-center text-[6px] leading-tight text-[#233674] md:relative md:mx-0 md:mr-2"
 			>
-				COURTESY<br />IMD<br />PUNE
+				<div class="relative flex h-full w-full flex-col items-center justify-center p-1">
+					<Globe class="h-6 w-6" strokeWidth={1.5} />
+
+					<div class="text-[7px] font-bold">DATA</div>
+					<div class="text-[6px]">ARCHIVE</div>
+				</div>
 			</div>
 		</div>
 
 		<!-- Terms Text -->
-		<div
-			class="mx-auto mt-4 mb-3 w-full max-w-2xl border-t border-gray-700 pt-4 text-center text-sm"
-		>
-			Is your locality <p class="inline-block w-14">{currentText}</p>
-			than usual?<br /> This bulletin compares today's conditions with historical averages.
+		<div class="mx-auto mt-4 mb-3 w-full max-w-2xl text-center text-sm">
+			Is your locality <p class="inline-block w-16">{currentText}</p>
+			than usual?<br /> Compare today's conditions with historical averages.
 		</div>
 	</div>
 </div>
