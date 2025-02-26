@@ -10,9 +10,12 @@
 		<main class="min-h-[85svh]">
 			{@render children()}
 		</main>
-		<footer class="mt-auto flex items-center text-sm">
-			<div class="mt-4 text-center text-xs text-gray-600">
+		<footer class="mt-auto flex w-full items-center text-sm">
+			<div
+				class="border-primary-border mt-4 w-full border-t pt-4 text-center text-xs text-gray-600"
+			>
 				Records derived from India Meteorological Department official observations.
+				<a href="https://www.imd.gov.in" class="underline underline-offset-2">www.imd.gov.in</a>
 			</div>
 		</footer>
 	</div>
