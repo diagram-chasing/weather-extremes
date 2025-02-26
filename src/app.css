@@ -13,3 +13,9 @@ body {
     font-family: 'JetBrains Mono Variable', monospace;
     background-color: #f3f0e6;
   }
+
+  @theme {
+    --color-primary-background: #f3f0e6;
+    --color-primary-text: #233674;
+    --color-secondary-text: #666666;
+  }

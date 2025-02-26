@@ -159,19 +159,6 @@ export const indiaVintageStyle = {
 				'line-width': 2.5,
 				'line-offset': 0.5
 			}
-		},
-
-		{
-			id: 'grid-lines',
-			type: 'line',
-			source: 'openmaptiles',
-			'source-layer': 'graticule',
-			filter: ['==', 'display', true],
-			paint: {
-				'line-color': '#ccbea3',
-				'line-width': 0.5,
-				'line-opacity': 0.3
-			}
 		}
 	]
 };
