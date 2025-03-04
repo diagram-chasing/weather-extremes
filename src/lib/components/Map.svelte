@@ -1,162 +1,220 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { MapLibre, GeoJSON, Popup, MarkerLayer } from 'svelte-maplibre';
-	import { mapClasses, indiaVintageStyle, indiaBounds } from './styles';
+	import { onMount, onDestroy } from 'svelte';
+	import maplibregl from 'maplibre-gl';
+	import { indiaVintageStyle, indiaBounds, mapClasses } from './styles';
 
-	let stationsSource = 'https://dss.imd.gov.in/dwr_img/GIS/Observed_Stations.json';
-	let clickedFeature = $state(undefined);
-	let openOn = $state('hover');
+	let mapContainer: HTMLDivElement;
+	let map: maplibregl.Map;
+	let stationsData: any; 
+	let stationsLoaded = false;
 
-	// Get color for temperature departure
-	function getTempColor(departure) {
-		if (departure === null || departure === undefined) return '#888888';
-
-		if (departure >= 10) return '#d73027';
-		if (departure >= 6) return '#fc8d59';
-		if (departure >= 3) return '#fee090';
-		if (departure >= 0) return '#ffffbf';
-		if (departure >= -3) return '#e0f3f8';
-		if (departure >= -6) return '#91bfdb';
-		return '#4575b4';
+	async function fetchStations() {
+		try {
+			const response = await fetch('/api/stations');
+			if (!response.ok) {
+				throw new Error('Failed to fetch stations data');
+			}
+			stationsData = await response.json();
+			
+			// Process data to ensure we can calculate averages in clusters
+			if (stationsData && stationsData.features) {
+				stationsData.features = stationsData.features.map((feature: any) => {
+					// Ensure PD_Mx_Dep is a number for averaging
+					if (feature.properties && feature.properties.PD_Mx_Dep !== null) {
+						feature.properties.PD_Mx_Dep = Number(feature.properties.PD_Mx_Dep);
+					} else {
+						feature.properties.PD_Mx_Dep = null;
+					}
+					return feature;
+				});
+			}
+			
+			stationsLoaded = true;
+			
+			if (map) {
+				addStationsToMap();
+			}
+		} catch (error) {
+			console.error('Error fetching stations data:', error);
+		}
 	}
 
-	// Format the temperature for display
-	function formatTemp(temp) {
-		if (temp === null || temp === undefined) return 'N/A';
-		return `${temp}°C`;
+	function addStationsToMap() {
+		if (!map || !stationsLoaded) return;
+
+		// Add stations source with clustering enabled
+		map.addSource('stations', {
+			type: 'geojson',
+			data: stationsData,
+			cluster: true,
+			clusterMaxZoom: 14, // Max zoom to cluster points
+			clusterRadius: 50, // Radius of each cluster when clustering points
+			clusterProperties: {
+				// Sum of all PD_Mx_Dep values in the cluster
+				sum_pd_mx_dep: ['+', ['case', 
+					['==', ['get', 'PD_Mx_Dep'], null], 
+					0, 
+					['get', 'PD_Mx_Dep']
+				]],
+				// Count of valid PD_Mx_Dep values (not null)
+				count_valid: ['+', ['case', 
+					['==', ['get', 'PD_Mx_Dep'], null], 
+					0, 
+					1
+				]]
+			}
+		});
+
+		// Add a layer for cluster average values
+		map.addLayer({
+			id: 'cluster-avg',
+			type: 'symbol',
+			source: 'stations',
+			filter: ['has', 'point_count'],
+			layout: {
+				'text-field': [
+					'case',
+					['==', ['get', 'count_valid'], 0],
+					'',
+					// Format the average to 1 decimal place
+					['concat', 
+						['number-format', 
+							['/', 
+								['get', 'sum_pd_mx_dep'], 
+								['get', 'count_valid']
+							],
+							{ 'locale': 'en-US', 'max-fraction-digits': 1 }
+						]
+					]
+				],
+				'text-font': ['Open Sans Bold'],
+				'text-size': 14,
+				'text-allow-overlap': false,
+				'text-ignore-placement': false
+			},
+			paint: {
+				'text-color': '#233674',
+				'text-halo-color': '#f8f5e6',
+				'text-halo-width': 2
+			}
+		});
+
+		// Add a layer for individual station labels (non-clustered points)
+		map.addLayer({
+			id: 'stations-labels',
+			type: 'symbol',
+			source: 'stations',
+			filter: ['!', ['has', 'point_count']],
+			layout: {
+				'text-field': [
+					'case',
+					['==', ['get', 'PD_Mx_Dep'], null],
+					'',
+					['to-string', ['get', 'PD_Mx_Dep']]
+				],
+				'text-font': ['Open Sans Bold'],
+				'text-size': 14,
+				'text-allow-overlap': false,
+				'text-ignore-placement': false,
+				'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+				'text-radial-offset': 0.5,
+				'text-justify': 'auto'
+			},
+			paint: {
+				'text-color': '#233674',
+				'text-halo-color': '#f8f5e6',
+				'text-halo-width': 2
+			}
+		});
+
+		// Add click event for clusters
+		map.on('click', 'cluster-avg', (e: any) => {
+			const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-avg'] });
+			const clusterId = features[0].properties.cluster_id;
+			
+			(map.getSource('stations') as any).getClusterExpansionZoom(
+				clusterId,
+				(err: any, zoom: number) => {
+					if (err) return;
+					
+					map.easeTo({
+						center: (features[0].geometry as any).coordinates,
+						zoom: zoom
+					});
+				}
+			);
+		});
+
+		// Add popup for clusters to show more details
+		map.on('mouseenter', 'cluster-avg', (e: any) => {
+			map.getCanvas().style.cursor = 'pointer';
+			
+			const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-avg'] });
+			const props = features[0].properties;
+			const pointCount = props.point_count;
+			const validCount = props.count_valid;
+			
+			let avgValue = 'N/A';
+			if (validCount > 0) {
+				avgValue = (props.sum_pd_mx_dep / validCount).toFixed(1);
+			}
+			
+			const coordinates = (features[0].geometry as any).coordinates.slice();
+			
+			const popupContent = `
+				<div style="font-family: 'JetBrains Mono Variable', monospace; color: #233674;">
+					
+					Average PD_Mx_Dep: ${avgValue}<br>
+					Points with data: ${validCount}/${pointCount}<br>
+					
+				</div>
+			`;
+			
+			new maplibregl.Popup()
+				.setLngLat(coordinates)
+				.setHTML(popupContent)
+				.addTo(map);
+		});
+		
+		map.on('mouseleave', 'cluster-avg', () => {
+			map.getCanvas().style.cursor = '';
+			const popups = document.getElementsByClassName('maplibregl-popup');
+			if (popups.length) {
+				(popups[0] as HTMLElement).remove();
+			}
+		});
 	}
+
+	onMount(() => {
+		// Initialize map
+		map = new maplibregl.Map({
+			container: mapContainer,
+			style: indiaVintageStyle,
+			bounds: indiaBounds,
+			fitBoundsOptions: { padding: 50 }
+		});
+
+		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		
+
+		map.on('load', () => {
+			if (stationsLoaded) {
+				addStationsToMap();
+			}
+		});
+
+		// Fetch stations data
+		fetchStations();
+	});
+
+	onDestroy(() => {
+		if (map) {
+			map.remove();
+		}
+	});
 </script>
 
-<MapLibre
-	style={indiaVintageStyle}
-	class={mapClasses}
-	standardControls="top-right"
-	zoom={4}
-	center={[78.9629, 20.5937]}
-	maxBounds={indiaBounds}
-	minZoom={3.5}
-	maxZoom={8}
->
-	<GeoJSON
-		data={stationsSource}
-		id="stations"
-		cluster={{
-			radius: 50,
-			maxZoom: 14,
-			properties: {
-				total_mag: ['+', ['get', 'D1_Mx_Dep']]
-			}
-		}}
-	>
-		<!-- Markers for clustered points -->
-		<MarkerLayer applyToClusters asButton onclick={(e) => (clickedFeature = e.feature?.properties)}>
-			{#snippet children({ feature })}
-				<div
-					class="flex items-center justify-center rounded-full p-2 font-bold text-white"
-					style="background-color: #2a4065; width: 40px; height: 40px; border: 2px solid #fff;"
-				>
-					{feature.properties.point_count}
-				</div>
-				<Popup {openOn} closeOnClickInside>
-					<div class="p-2">
-						<h3 class="font-bold">Station Cluster</h3>
-						<p>Number of stations: {feature.properties.point_count}</p>
-						<p>
-							Average Max Temp Departure:
-							{(feature.properties.total_mag / feature.properties.point_count || 0).toFixed(1)}°C
-						</p>
-					</div>
-				</Popup>
-			{/snippet}
-		</MarkerLayer>
-
-		<!-- Markers for individual stations -->
-		<MarkerLayer
-			applyToClusters={false}
-			asButton
-			onclick={(e) => (clickedFeature = e.feature?.properties)}
-		>
-			{#snippet children({ feature })}
-				{@const props = feature.properties}
-				{@const depColor = getTempColor(props.D1_Mx_Dep)}
-
-				<div
-					class="flex items-center justify-center rounded-full text-xs font-bold"
-					style="background-color: {depColor}; color: {props.D1_Mx_Dep > 3 || props.D1_Mx_Dep < -3
-						? 'white'
-						: 'black'}; width: 30px; height: 30px; border: 1px solid #000;"
-				>
-					{props.D1_Mx_Dep !== null ? props.D1_Mx_Dep : '?'}
-				</div>
-
-				<Popup {openOn} closeOnClickInside>
-					<div class="max-w-xs p-2">
-						<h3 class="mb-2 border-b border-gray-300 pb-1 text-base font-bold">
-							{props.Stat_Name}
-						</h3>
-						<p class="mb-1">Date: <span class="font-medium">{props.Date}</span></p>
-						<p class="mb-1">
-							Max Temp: <span class="font-medium">{formatTemp(props.D1_Mx_Temp)}</span>
-						</p>
-						<p class="mb-1">
-							Max Temp Departure:
-							<span class="font-medium" style="color: {depColor}">
-								{formatTemp(props.D1_Mx_Dep)}
-							</span>
-						</p>
-						<p class="mb-1">
-							Min Temp: <span class="font-medium">{formatTemp(props.D1_Mn_Temp)}</span>
-						</p>
-						<p class="mb-1">
-							Min Temp Departure: <span class="font-medium">{formatTemp(props.D1_Mn_Dep)}</span>
-						</p>
-						{#if props.Pt_24_Rain}
-							<p class="mb-1">
-								24h Rainfall: <span class="font-medium">{props.Pt_24_Rain} mm</span>
-							</p>
-						{/if}
-						{#if props.D1F_Weathr}
-							<p class="mb-1">Weather: <span class="font-medium">{props.D1F_Weathr}</span></p>
-						{/if}
-					</div>
-				</Popup>
-			{/snippet}
-		</MarkerLayer>
-	</GeoJSON>
-</MapLibre>
-
-{#if clickedFeature}
-	<div class="mt-4 rounded border border-gray-300 bg-gray-50 p-3">
-		<h3 class="font-bold">{clickedFeature.Stat_Name || 'Cluster'}</h3>
-		{#if clickedFeature.cluster}
-			<p>
-				Number of Stations:
-				<span class="font-bold text-gray-800">{clickedFeature.point_count}</span>
-			</p>
-			<p>
-				Average Max Temp Departure:
-				<span class="font-bold text-gray-800">
-					{(clickedFeature.total_mag / clickedFeature.point_count || 0).toFixed(1)}°C
-				</span>
-			</p>
-		{:else}
-			<p>
-				Max Temp: <span class="font-bold text-gray-800"
-					>{formatTemp(clickedFeature.D1_Mx_Temp)}</span
-				>
-			</p>
-			<p>
-				Max Temp Departure:
-				<span class="font-bold" style="color: {getTempColor(clickedFeature.D1_Mx_Dep)}">
-					{formatTemp(clickedFeature.D1_Mx_Dep)}
-				</span>
-			</p>
-			{#if clickedFeature.D1F_Weathr}
-				<p>Weather: <span class="font-bold text-gray-800">{clickedFeature.D1F_Weathr}</span></p>
-			{/if}
-		{/if}
-	</div>
-{/if}
+<div class={mapClasses} bind:this={mapContainer}></div>
 
 <style>
 	:global(.maplibregl-ctrl-group) {

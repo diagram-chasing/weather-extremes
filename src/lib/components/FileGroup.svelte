@@ -4,7 +4,7 @@
 	import FileTabButton from './FileButton.svelte';
 
 	// For Svelte 5, use $state instead
-	let selectedValue = $state('rainfall');
+	let selectedValue = $state('heat');
 
 	const choices = [
 		{
